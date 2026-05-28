@@ -1,0 +1,1215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TeleHealth MVP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "system-ui", "sans-serif"] },
+            colors: {
+              brand: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+              },
+              surface: {
+                50: "#f8fafc",
+                100: "#f1f5f9",
+                200: "#e2e8f0",
+                700: "#334155",
+                800: "#1e293b",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      .fade-in {
+        animation: fadeIn 0.25s ease-out;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .pulse-ring {
+        animation: pulseRing 2s infinite;
+      }
+      @keyframes pulseRing {
+        0% {
+          box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4);
+        }
+        70% {
+          box-shadow: 0 0 0 8px rgba(37, 99, 235, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-surface-50 text-slate-800 h-screen overflow-hidden">
+    <!-- Auth Screen -->
+    <div
+      id="auth-screen"
+      class="h-full flex items-center justify-center bg-gradient-to-br from-brand-50 to-white"
+    >
+      <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md fade-in">
+        <div class="text-center mb-6">
+          <div
+            class="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-4"
+          >
+            <span class="text-3xl">🏥</span>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-900">TeleHealth</h1>
+          <p class="text-slate-500 text-sm mt-1">
+            Secure Telemedicine Platform
+          </p>
+        </div>
+
+        <div class="flex gap-2 mb-6 bg-surface-100 p-1 rounded-lg">
+          <button
+            id="tab-login"
+            class="flex-1 py-2 text-sm font-medium rounded-md bg-white shadow text-brand-600"
+            onclick="switchAuthTab('login')"
+          >
+            Login
+          </button>
+          <button
+            id="tab-register"
+            class="flex-1 py-2 text-sm font-medium rounded-md text-slate-500"
+            onclick="switchAuthTab('register')"
+          >
+            Register
+          </button>
+        </div>
+
+        <form id="auth-form" onsubmit="handleAuth(event)">
+          <div id="role-field" class="hidden mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1"
+              >Role</label
+            >
+            <select
+              id="role"
+              class="w-full px-4 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="PATIENT">Patient</option>
+              <option value="DOCTOR">Doctor</option>
+            </select>
+          </div>
+          <div class="mb-4">
+            <input
+              type="email"
+              id="email"
+              placeholder="Email address"
+              required
+              class="w-full px-4 py-3 border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          <div class="mb-6">
+            <input
+              type="password"
+              id="password"
+              placeholder="Password"
+              required
+              class="w-full px-4 py-3 border border-surface-200 rounded-lg focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          <button
+            type="submit"
+            id="auth-btn"
+            class="w-full bg-brand-600 text-white py-3 rounded-lg font-semibold hover:bg-brand-700 transition-colors shadow-lg shadow-brand-500/30"
+          >
+            Sign In
+          </button>
+        </form>
+        <div id="auth-msg" class="mt-4 text-center text-sm hidden"></div>
+        <div class="mt-4 text-center text-xs text-slate-400">
+          Demo: doctor@demo.com / Doctor123! &nbsp;|&nbsp; patient@demo.com /
+          Patient123!
+        </div>
+      </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app-screen" class="hidden h-full flex">
+      <!-- Sidebar -->
+      <aside class="w-64 bg-surface-800 text-white flex flex-col">
+        <div class="p-6 border-b border-surface-700">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 bg-brand-500 rounded-lg flex items-center justify-center text-xl"
+            >
+              🏥
+            </div>
+            <span class="text-xl font-bold">TeleHealth</span>
+          </div>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+          <button
+            onclick="showPage('home')"
+            id="nav-home"
+            class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-brand-500/20 text-brand-100 font-medium"
+          >
+            <span>🏠</span> Home
+          </button>
+          <button
+            onclick="showPage('doctors')"
+            id="nav-doctors"
+            class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-700 text-slate-300 transition-colors"
+          >
+            <span>🔍</span> Find Doctors
+          </button>
+          <button
+            onclick="showPage('appointments')"
+            id="nav-appointments"
+            class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-700 text-slate-300 transition-colors"
+          >
+            <span>📅</span> My Appointments
+          </button>
+          <button
+            onclick="showPage('records')"
+            id="nav-records"
+            class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-700 text-slate-300 transition-colors"
+          >
+            <span>📋</span> Medical Records
+          </button>
+          <button
+            onclick="showPage('profile')"
+            id="nav-profile"
+            class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-700 text-slate-300 transition-colors"
+          >
+            <span>👤</span> Profile
+          </button>
+          <button
+            onclick="showPage('doctor-dashboard')"
+            id="nav-doctor-dashboard"
+            class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-700 text-slate-300 transition-colors hidden"
+          >
+            <span>📊</span> Doctor Dashboard
+          </button>
+        </nav>
+        <div class="p-4 border-t border-surface-700">
+          <button
+            onclick="logout()"
+            class="w-full flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors"
+          >
+            <span>🚪</span> Logout
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="flex-1 flex flex-col overflow-hidden">
+        <!-- Top Bar -->
+        <header
+          class="bg-white border-b border-surface-200 px-6 py-4 flex items-center justify-between"
+        >
+          <div class="flex-1 max-w-2xl">
+            <div class="relative">
+              <input
+                type="text"
+                id="symptom-search"
+                placeholder="Describe your symptoms or health concern..."
+                class="w-full pl-12 pr-4 py-3 bg-brand-50 border border-brand-100 rounded-xl focus:ring-2 focus:ring-brand-500 text-sm"
+                oninput="handleSymptomSearch(this.value)"
+              />
+              <span class="absolute left-4 top-3.5 text-slate-400">🔍</span>
+              <div
+                id="ai-suggestion"
+                class="hidden absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-surface-200 p-4 fade-in z-10"
+              >
+                <p class="text-xs text-slate-500 mb-2">
+                  AI Recommended Specializations
+                </p>
+                <div id="ai-tags" class="flex flex-wrap gap-2"></div>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-4 ml-6">
+            <span class="text-sm text-slate-500">UTC+8</span>
+            <button class="relative p-2 text-slate-400 hover:text-slate-600">
+              <span>🔔</span>
+              <span
+                id="notif-badge"
+                class="hidden absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full pulse-ring"
+              ></span>
+            </button>
+            <div class="flex items-center gap-2">
+              <div
+                class="w-10 h-10 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 font-semibold"
+                id="user-avatar"
+              >
+                U
+              </div>
+              <div class="hidden lg:block">
+                <p class="text-sm font-medium text-slate-900" id="header-name">
+                  User
+                </p>
+                <p class="text-xs text-slate-500" id="header-role">Patient</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Pages Container -->
+        <div class="flex-1 overflow-y-auto p-6 scrollbar-hide">
+          <!-- Home Page -->
+          <div id="page-home" class="page-content fade-in">
+            <h2 class="text-2xl font-bold text-slate-900 mb-6">
+              Welcome back, <span id="welcome-name">User</span> 👋
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div
+                class="bg-gradient-to-br from-brand-500 to-brand-700 rounded-2xl p-6 text-white"
+              >
+                <p class="text-brand-100 text-sm">Upcoming Appointments</p>
+                <p class="text-3xl font-bold mt-2" id="stat-appointments">0</p>
+              </div>
+              <div
+                class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl p-6 text-white"
+              >
+                <p class="text-emerald-100 text-sm">Medical Records</p>
+                <p class="text-3xl font-bold mt-2" id="stat-records">0</p>
+              </div>
+              <div
+                class="bg-gradient-to-br from-violet-500 to-violet-700 rounded-2xl p-6 text-white"
+              >
+                <p class="text-violet-100 text-sm">Available Doctors</p>
+                <p class="text-3xl font-bold mt-2" id="stat-doctors">0</p>
+              </div>
+            </div>
+            <div
+              class="bg-white rounded-2xl shadow-sm border border-surface-200 p-6"
+            >
+              <h3 class="text-lg font-semibold text-slate-900 mb-4">
+                Recent Activity
+              </h3>
+              <div id="activity-list" class="space-y-3"></div>
+            </div>
+          </div>
+
+          <!-- Find Doctors Page -->
+          <div id="page-doctors" class="page-content hidden fade-in">
+            <div class="flex items-center justify-between mb-6">
+              <h2 class="text-2xl font-bold text-slate-900">Find Doctors</h2>
+              <select
+                id="filter-spec"
+                class="px-4 py-2 border border-surface-200 rounded-lg text-sm"
+                onchange="loadDoctors()"
+              >
+                <option value="">All Specializations</option>
+                <option value="Cardiology">Cardiology</option>
+                <option value="General Practice">General Practice</option>
+                <option value="Neurology">Neurology</option>
+                <option value="Dermatology">Dermatology</option>
+                <option value="Orthopedics">Orthopedics</option>
+                <option value="Psychiatry">Psychiatry</option>
+              </select>
+            </div>
+            <div
+              id="doctors-grid"
+              class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+            ></div>
+          </div>
+
+          <!-- Appointments Page -->
+          <div id="page-appointments" class="page-content hidden fade-in">
+            <h2 class="text-2xl font-bold text-slate-900 mb-6">
+              My Appointments
+            </h2>
+            <div id="appointments-list" class="space-y-4"></div>
+          </div>
+
+          <!-- Medical Records Page -->
+          <div id="page-records" class="page-content hidden fade-in">
+            <h2 class="text-2xl font-bold text-slate-900 mb-6">
+              Medical Records
+            </h2>
+            <div id="records-list" class="space-y-4"></div>
+          </div>
+
+          <!-- Profile Page -->
+          <div id="page-profile" class="page-content hidden fade-in">
+            <h2 class="text-2xl font-bold text-slate-900 mb-6">
+              Profile Settings
+            </h2>
+            <div
+              class="bg-white rounded-2xl shadow-sm border border-surface-200 p-6 max-w-2xl"
+            >
+              <form onsubmit="updateProfile(event)">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1"
+                      >Full Name</label
+                    ><input
+                      type="text"
+                      id="prof-name"
+                      class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1"
+                      >Date of Birth</label
+                    ><input
+                      type="date"
+                      id="prof-dob"
+                      class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1"
+                      >Weight (kg)</label
+                    ><input
+                      type="number"
+                      id="prof-weight"
+                      class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1"
+                      >Height (cm)</label
+                    ><input
+                      type="number"
+                      id="prof-height"
+                      class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+                    />
+                  </div>
+                </div>
+                <div class="mb-4">
+                  <label class="block text-sm font-medium text-slate-700 mb-1"
+                    >Contact Details</label
+                  ><input
+                    type="text"
+                    id="prof-contact"
+                    class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+                  />
+                </div>
+                <div class="mb-6">
+                  <label class="block text-sm font-medium text-slate-700 mb-1"
+                    >Medical History</label
+                  ><textarea
+                    id="prof-history"
+                    rows="3"
+                    class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+                  ></textarea>
+                </div>
+                <button
+                  type="submit"
+                  class="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Doctor Dashboard Page (Doctor-only) -->
+          <div id="page-doctor-dashboard" class="page-content hidden fade-in">
+            <h2 class="text-2xl font-bold text-slate-900 mb-6">
+              Doctor Dashboard
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div
+                class="bg-gradient-to-br from-brand-500 to-brand-700 rounded-2xl p-6 text-white"
+              >
+                <p class="text-brand-100 text-sm">Today's Appointments</p>
+                <p class="text-3xl font-bold mt-2" id="doc-stat-today">0</p>
+              </div>
+              <div
+                class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl p-6 text-white"
+              >
+                <p class="text-emerald-100 text-sm">Total Patients</p>
+                <p class="text-3xl font-bold mt-2" id="doc-stat-patients">0</p>
+              </div>
+              <div
+                class="bg-gradient-to-br from-violet-500 to-violet-700 rounded-2xl p-6 text-white"
+              >
+                <p class="text-violet-100 text-sm">Available Slots</p>
+                <p class="text-3xl font-bold mt-2" id="doc-stat-slots">0</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div
+                class="bg-white rounded-2xl shadow-sm border border-surface-200 p-6"
+              >
+                <h3 class="text-lg font-semibold text-slate-900 mb-4">
+                  📅 Manage Schedule
+                </h3>
+                <form onsubmit="createScheduleSlot(event)" class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1"
+                      >Start Time</label
+                    ><input
+                      type="datetime-local"
+                      id="slot-start"
+                      required
+                      class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1"
+                      >End Time</label
+                    ><input
+                      type="datetime-local"
+                      id="slot-end"
+                      required
+                      class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    class="w-full py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700"
+                  >
+                    Create Available Slot
+                  </button>
+                </form>
+                <div id="doctor-schedule-list" class="mt-6 space-y-2"></div>
+              </div>
+              <div
+                class="bg-white rounded-2xl shadow-sm border border-surface-200 p-6"
+              >
+                <h3 class="text-lg font-semibold text-slate-900 mb-4">
+                  🩺 Today's Appointments
+                </h3>
+                <div id="doctor-today-appts" class="space-y-3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Booking Modal -->
+    <div
+      id="booking-modal"
+      class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 fade-in">
+        <h3 class="text-xl font-bold text-slate-900 mb-4">Book Consultation</h3>
+        <p class="text-slate-500 mb-4">
+          Selected:
+          <span id="modal-doctor" class="font-medium text-brand-600"></span>
+        </p>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-700 mb-1"
+            >Date & Time</label
+          >
+          <input
+            type="datetime-local"
+            id="modal-time"
+            class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+          />
+        </div>
+        <div class="flex gap-3">
+          <button
+            onclick="closeModal()"
+            class="flex-1 py-2 border border-surface-200 rounded-lg text-slate-600 hover:bg-surface-50"
+          >
+            Cancel
+          </button>
+          <button
+            onclick="confirmBooking()"
+            class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium"
+          >
+            Confirm Booking
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Medical Record Modal (Doctor) -->
+    <div
+      id="record-modal"
+      class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 fade-in">
+        <h3 class="text-xl font-bold text-slate-900 mb-4">
+          Add Medical Record
+        </h3>
+        <p class="text-slate-500 mb-4">
+          Appointment: <span id="record-appt-id" class="font-medium"></span>
+        </p>
+        <form onsubmit="saveMedicalRecord(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1"
+              >Diagnosis</label
+            ><input
+              type="text"
+              id="record-diagnosis"
+              placeholder="e.g., Acute bronchitis"
+              class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1"
+              >Prescriptions</label
+            ><textarea
+              id="record-prescriptions"
+              rows="2"
+              placeholder="e.g., Azithromycin 500mg daily x 5 days"
+              class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+            ></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1"
+              >Doctor's Notes</label
+            ><textarea
+              id="record-notes"
+              rows="3"
+              placeholder="Additional notes, follow-up instructions..."
+              class="w-full px-4 py-2 border border-surface-200 rounded-lg"
+            ></textarea>
+          </div>
+          <div class="flex gap-3">
+            <button
+              type="button"
+              onclick="closeRecordModal()"
+              class="flex-1 py-2 border border-surface-200 rounded-lg text-slate-600 hover:bg-surface-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium"
+            >
+              Save Record
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Jitsi Modal -->
+    <div
+      id="jitsi-modal"
+      class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-4 border-b">
+          <h3 class="text-lg font-semibold">Video Consultation</h3>
+          <button
+            onclick="closeJitsi()"
+            class="p-2 hover:bg-surface-100 rounded-lg"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="jitsi-container" class="flex-1"></div>
+      </div>
+    </div>
+
+    <script>
+      const API = "http://localhost:3001";
+      let currentUser = null;
+      let socket = null;
+      let selectedDoctor = null;
+      let selectedApptForRecord = null;
+
+      // Auth
+      function switchAuthTab(tab) {
+        document.getElementById("tab-login").className =
+          tab === "login"
+            ? "flex-1 py-2 text-sm font-medium rounded-md bg-white shadow text-brand-600"
+            : "flex-1 py-2 text-sm font-medium rounded-md text-slate-500";
+        document.getElementById("tab-register").className =
+          tab === "register"
+            ? "flex-1 py-2 text-sm font-medium rounded-md bg-white shadow text-brand-600"
+            : "flex-1 py-2 text-sm font-medium rounded-md text-slate-500";
+        document
+          .getElementById("role-field")
+          .classList.toggle("hidden", tab !== "register");
+        document.getElementById("auth-btn").textContent =
+          tab === "login" ? "Sign In" : "Create Account";
+      }
+
+      async function handleAuth(e) {
+        e.preventDefault();
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const isLogin = document
+          .getElementById("tab-login")
+          .classList.contains("bg-white");
+        const url = isLogin ? `${API}/auth/login` : `${API}/auth/register`;
+        const body = { email, password };
+        if (!isLogin) body.role = document.getElementById("role").value;
+
+        const msg = document.getElementById("auth-msg");
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message);
+          if (isLogin) {
+            currentUser = data.user;
+            initApp();
+          } else {
+            msg.textContent = "✅ Account created! Please login.";
+            msg.className = "mt-4 text-center text-sm text-emerald-600";
+            switchAuthTab("login");
+          }
+        } catch (err) {
+          msg.textContent = "❌ " + err.message;
+          msg.className = "mt-4 text-center text-sm text-red-500";
+        }
+        msg.classList.remove("hidden");
+      }
+
+      function initApp() {
+        document.getElementById("auth-screen").classList.add("hidden");
+        document.getElementById("app-screen").classList.remove("hidden");
+        document.getElementById("header-name").textContent =
+          currentUser.email.split("@")[0];
+        document.getElementById("header-role").textContent = currentUser.role;
+        document.getElementById("user-avatar").textContent =
+          currentUser.email[0].toUpperCase();
+        document.getElementById("welcome-name").textContent =
+          currentUser.email.split("@")[0];
+
+        // Show/hide doctor nav
+        if (currentUser.role === "DOCTOR") {
+          document
+            .getElementById("nav-doctor-dashboard")
+            .classList.remove("hidden");
+        }
+
+        loadStats();
+        initSocket();
+        showPage("home");
+      }
+
+      // Navigation
+      function showPage(page) {
+        document
+          .querySelectorAll(".page-content")
+          .forEach((p) => p.classList.add("hidden"));
+        document.getElementById(`page-${page}`).classList.remove("hidden");
+        document.querySelectorAll(".nav-btn").forEach((b) => {
+          b.classList.remove("bg-brand-500/20", "text-brand-100");
+          b.classList.add("text-slate-300");
+        });
+        document
+          .getElementById(`nav-${page}`)
+          .classList.add("bg-brand-500/20", "text-brand-100");
+        document
+          .getElementById(`nav-${page}`)
+          .classList.remove("text-slate-300");
+
+        if (page === "doctors") loadDoctors();
+        if (page === "appointments") loadAppointments();
+        if (page === "records") loadRecords();
+        if (page === "profile") loadProfile();
+        if (page === "doctor-dashboard" && currentUser?.role === "DOCTOR")
+          loadDoctorDashboard();
+      }
+
+      // Socket.io
+      function initSocket() {
+        socket = io(API, {
+          path: "/socket.io",
+          namespace: "/telehealth",
+          auth: { userId: currentUser?.id || "guest" },
+        });
+        socket.on("connect", () => console.log("🔌 Socket connected"));
+        socket.on("appointment:booked", (data) => {
+          document.getElementById("notif-badge").classList.remove("hidden");
+          showToast(
+            `🔔 New Booking: ${new Date(data.startAt).toLocaleString()}`,
+          );
+          if (currentUser?.role === "DOCTOR") loadDoctorDashboard();
+          else loadStats();
+        });
+        socket.on("appointment:cancelled", () => {
+          showToast("❌ Appointment cancelled");
+          if (currentUser?.role === "DOCTOR") loadDoctorDashboard();
+          else loadStats();
+        });
+      }
+
+      function showToast(msg) {
+        const toast = document.createElement("div");
+        toast.className =
+          "fixed top-4 right-4 bg-white rounded-xl shadow-xl border border-surface-200 p-4 fade-in z-50 flex items-center gap-3";
+        toast.innerHTML = `<span class="text-sm">${msg}</span>`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+      }
+
+      // Data Loading
+      async function loadStats() {
+        try {
+          const appts = await fetch(`${API}/appointments`, {
+            credentials: "include",
+          }).then((r) => r.json());
+          document.getElementById("stat-appointments").textContent =
+            appts.length;
+          const recs = await fetch(`${API}/medical-records/patient`, {
+            credentials: "include",
+          }).then((r) => r.json());
+          document.getElementById("stat-records").textContent = recs.length;
+          const docs = await fetch(`${API}/doctors`, {
+            credentials: "include",
+          }).then((r) => r.json());
+          document.getElementById("stat-doctors").textContent = docs.length;
+
+          const actList = document.getElementById("activity-list");
+          actList.innerHTML =
+            appts
+              .slice(0, 3)
+              .map(
+                (a) => `
+          <div class="flex items-center gap-3 p-3 bg-surface-50 rounded-lg">
+            <div class="w-10 h-10 bg-brand-100 rounded-full flex items-center justify-center text-brand-600">📅</div>
+            <div class="flex-1">
+              <p class="text-sm font-medium">Appointment ${a.status}</p>
+              <p class="text-xs text-slate-500">${new Date(a.startAt).toLocaleString()}</p>
+            </div>
+            ${a.status === "BOOKED" && a.meetingLink ? `<button onclick="openJitsi('${a.meetingLink}')" class="text-brand-600 text-sm font-medium hover:underline">Join</button>` : ""}
+          </div>
+        `,
+              )
+              .join("") ||
+            '<p class="text-slate-400 text-sm">No recent activity</p>';
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // AI Symptom Search
+      let symptomTimeout;
+      function handleSymptomSearch(val) {
+        clearTimeout(symptomTimeout);
+        if (val.length < 3) {
+          document.getElementById("ai-suggestion").classList.add("hidden");
+          return;
+        }
+        symptomTimeout = setTimeout(async () => {
+          try {
+            const res = await fetch(`${API}/doctors/ai-recommend`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ symptoms: val }),
+            });
+            const data = await res.json();
+            document.getElementById("ai-tags").innerHTML =
+              data.recommendedSpecializations
+                .map(
+                  (s) =>
+                    `<button onclick="filterBySpec('${s}')" class="px-3 py-1 bg-brand-100 text-brand-700 rounded-full text-xs font-medium hover:bg-brand-200">${s}</button>`,
+                )
+                .join("");
+            document.getElementById("ai-suggestion").classList.remove("hidden");
+          } catch (e) {}
+        }, 500);
+      }
+
+      function filterBySpec(spec) {
+        document.getElementById("filter-spec").value = spec;
+        document.getElementById("ai-suggestion").classList.add("hidden");
+        showPage("doctors");
+      }
+
+      // Doctors
+      async function loadDoctors() {
+        const spec = document.getElementById("filter-spec").value;
+        const url = `${API}/doctors${spec ? `?specialization=${spec}` : ""}`;
+        try {
+          const docs = await fetch(url, { credentials: "include" }).then((r) =>
+            r.json(),
+          );
+          document.getElementById("doctors-grid").innerHTML =
+            docs
+              .map(
+                (d) => `
+          <div class="bg-white rounded-2xl shadow-sm border border-surface-200 p-6 hover:shadow-md transition-shadow">
+            <div class="flex items-center gap-4 mb-4">
+              <div class="w-16 h-16 bg-gradient-to-br from-brand-100 to-brand-200 rounded-full flex items-center justify-center text-2xl">👨‍⚕️</div>
+              <div>
+                <h3 class="font-bold text-slate-900">Dr. ${d.fullName || d.user?.email?.split("@")[0] || "Doctor"}</h3>
+                <p class="text-brand-600 text-sm font-medium">${d.specialization}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 mb-3">${"★"
+              .repeat(5)
+              .split("")
+              .map((s) => `<span class="text-amber-400">${s}</span>`)
+              .join("")}</div>
+            <div class="flex items-center gap-2 mb-4"><span class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">✅ Available Today</span></div>
+            <button onclick="openBooking('${d.user?.email || ""}', '${d.fullName || "Doctor"}')" class="w-full py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors">Book Consultation</button>
+          </div>
+        `,
+              )
+              .join("") ||
+            '<p class="col-span-full text-center text-slate-400 py-12">No doctors found. Register a doctor account first.</p>';
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // Booking
+      function openBooking(email, name) {
+        selectedDoctor = email;
+        document.getElementById("modal-doctor").textContent = name;
+        document.getElementById("booking-modal").classList.remove("hidden");
+        const now = new Date();
+        now.setHours(now.getHours() + 1);
+        document.getElementById("modal-time").value = now
+          .toISOString()
+          .slice(0, 16);
+      }
+      function closeModal() {
+        document.getElementById("booking-modal").classList.add("hidden");
+      }
+      async function confirmBooking() {
+        const startAt = new Date(
+          document.getElementById("modal-time").value,
+        ).toISOString();
+        try {
+          const res = await fetch(`${API}/appointments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ doctorEmail: selectedDoctor, startAt }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message);
+          closeModal();
+          showToast(`✅ Booked! ${data.meetingLink}`);
+          loadStats();
+        } catch (err) {
+          showToast("❌ " + err.message);
+        }
+      }
+
+      // Appointments
+      async function loadAppointments() {
+        try {
+          const appts = await fetch(`${API}/appointments`, {
+            credentials: "include",
+          }).then((r) => r.json());
+          document.getElementById("appointments-list").innerHTML =
+            appts
+              .map(
+                (a) => `
+          <div class="bg-white rounded-xl shadow-sm border border-surface-200 p-5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-brand-100 rounded-lg flex items-center justify-center text-brand-600 font-bold">${a.status[0]}</div>
+                <div>
+                  <p class="font-semibold text-slate-900">Dr. ${a.doctor?.doctorProfile?.fullName || "Doctor"}</p>
+                  <p class="text-sm text-slate-500">${new Date(a.startAt).toLocaleString()}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="px-3 py-1 rounded-full text-xs font-medium ${a.status === "BOOKED" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}">${a.status}</span>
+                ${a.meetingLink ? `<button onclick="openJitsi('${a.meetingLink}')" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700">Join Video</button>` : ""}
+                ${a.status === "BOOKED" ? `<button onclick="cancelAppt('${a.id}')" class="px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50">Cancel</button>` : ""}
+              </div>
+            </div>
+          </div>
+        `,
+              )
+              .join("") ||
+            '<p class="text-slate-400 text-center py-12">No appointments yet. Book a consultation to get started.</p>';
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      async function cancelAppt(id) {
+        if (!confirm("Cancel this appointment?")) return;
+        try {
+          await fetch(`${API}/appointments/cancel/${id}`, {
+            method: "PUT",
+            credentials: "include",
+          });
+          showToast("✅ Appointment cancelled");
+          loadAppointments();
+          loadStats();
+        } catch (e) {
+          showToast("❌ Failed to cancel");
+        }
+      }
+
+      // Medical Records
+      async function loadRecords() {
+        try {
+          const recs = await fetch(`${API}/medical-records/patient`, {
+            credentials: "include",
+          }).then((r) => r.json());
+          document.getElementById("records-list").innerHTML =
+            recs
+              .map(
+                (r) => `
+          <div class="bg-white rounded-xl shadow-sm border border-surface-200 p-5">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <p class="font-semibold text-slate-900">${r.diagnosis || "Consultation"}</p>
+                <p class="text-sm text-slate-500">Dr. ${r.appointment?.doctor?.doctorProfile?.fullName || "Doctor"} • ${new Date(r.createdAt).toLocaleDateString()}</p>
+              </div>
+            </div>
+            ${r.prescriptions ? `<div class="mb-2"><p class="text-sm font-medium text-slate-700">💊 Prescriptions</p><p class="text-sm text-slate-600">${r.prescriptions}</p></div>` : ""}
+            ${r.doctorNotes ? `<div><p class="text-sm font-medium text-slate-700">📝 Notes</p><p class="text-sm text-slate-600">${r.doctorNotes}</p></div>` : ""}
+          </div>
+        `,
+              )
+              .join("") ||
+            '<p class="text-slate-400 text-center py-12">No medical records yet. Visit a doctor to get your first record.</p>';
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // Profile
+      async function loadProfile() {
+        try {
+          const data = await fetch(`${API}/patient/profile`, {
+            credentials: "include",
+          }).then((r) => r.json());
+          document.getElementById("prof-name").value = data.fullName || "";
+          document.getElementById("prof-dob").value = data.dateOfBirth
+            ? new Date(data.dateOfBirth).toISOString().slice(0, 10)
+            : "";
+          document.getElementById("prof-weight").value = data.weight || "";
+          document.getElementById("prof-height").value = data.height || "";
+          document.getElementById("prof-contact").value =
+            data.contactDetails || "";
+          document.getElementById("prof-history").value =
+            data.basicMedicalHistory || "";
+        } catch (e) {}
+      }
+      async function updateProfile(e) {
+        e.preventDefault();
+        try {
+          await fetch(`${API}/patient/profile`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              fullName: document.getElementById("prof-name").value,
+              dateOfBirth: document.getElementById("prof-dob").value,
+              weight:
+                parseFloat(document.getElementById("prof-weight").value) ||
+                undefined,
+              height:
+                parseFloat(document.getElementById("prof-height").value) ||
+                undefined,
+              contactDetails: document.getElementById("prof-contact").value,
+              basicMedicalHistory:
+                document.getElementById("prof-history").value,
+            }),
+          });
+          showToast("✅ Profile updated");
+        } catch (e) {
+          showToast("❌ Update failed");
+        }
+      }
+
+      // Doctor Dashboard
+      async function loadDoctorDashboard() {
+        if (currentUser?.role !== "DOCTOR") return;
+        try {
+          const [schedule, appts] = await Promise.all([
+            fetch(`${API}/doctor/schedule`, { credentials: "include" }).then(
+              (r) => r.json(),
+            ),
+            fetch(`${API}/appointments`, { credentials: "include" }).then((r) =>
+              r.json(),
+            ),
+          ]);
+          const today = new Date().toDateString();
+          const todayAppts = appts.filter(
+            (a) => new Date(a.startAt).toDateString() === today,
+          );
+
+          document.getElementById("doc-stat-today").textContent =
+            todayAppts.length;
+          document.getElementById("doc-stat-patients").textContent = new Set(
+            appts.map((a) => a.patientId),
+          ).size;
+          document.getElementById("doc-stat-slots").textContent =
+            schedule.filter((s) => s.isAvailable).length;
+
+          document.getElementById("doctor-schedule-list").innerHTML =
+            schedule
+              .slice(0, 5)
+              .map(
+                (s) => `
+          <div class="flex items-center justify-between p-3 bg-surface-50 rounded-lg">
+            <div><p class="text-sm font-medium">${new Date(s.startAt).toLocaleString()}</p><p class="text-xs text-slate-500">to ${new Date(s.endAt).toLocaleTimeString()}</p></div>
+            <span class="px-2 py-1 rounded-full text-xs font-medium ${s.isAvailable ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}">${s.isAvailable ? "Available" : "Booked"}</span>
+          </div>
+        `,
+              )
+              .join("") ||
+            '<p class="text-slate-400 text-sm">No schedule yet.</p>';
+
+          document.getElementById("doctor-today-appts").innerHTML =
+            todayAppts
+              .map(
+                (a) => `
+          <div class="flex items-center justify-between p-3 bg-surface-50 rounded-lg">
+            <div><p class="text-sm font-medium">${a.patient?.email || "Patient"}</p><p class="text-xs text-slate-500">${new Date(a.startAt).toLocaleTimeString()}</p></div>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-1 rounded-full text-xs font-medium ${a.status === "BOOKED" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}">${a.status}</span>
+              ${a.status === "BOOKED" ? `<button onclick="openRecordModal('${a.id}')" class="px-3 py-1 bg-brand-600 text-white rounded text-xs hover:bg-brand-700">Add Record</button>` : ""}
+            </div>
+          </div>
+        `,
+              )
+              .join("") ||
+            '<p class="text-slate-400 text-sm">No appointments today.</p>';
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      async function createScheduleSlot(e) {
+        e.preventDefault();
+        const startAt = new Date(
+          document.getElementById("slot-start").value,
+        ).toISOString();
+        const endAt = new Date(
+          document.getElementById("slot-end").value,
+        ).toISOString();
+        try {
+          await fetch(`${API}/doctor/schedule`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ startAt, endAt, isBlocked: false }),
+          });
+          showToast("✅ Slot created");
+          e.target.reset();
+          loadDoctorDashboard();
+        } catch (err) {
+          showToast("❌ " + err.message);
+        }
+      }
+      function openRecordModal(apptId) {
+        selectedApptForRecord = apptId;
+        document.getElementById("record-appt-id").textContent = apptId;
+        document.getElementById("record-modal").classList.remove("hidden");
+      }
+      function closeRecordModal() {
+        document.getElementById("record-modal").classList.add("hidden");
+        selectedApptForRecord = null;
+      }
+      async function saveMedicalRecord(e) {
+        e.preventDefault();
+        try {
+          await fetch(`${API}/medical-records`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              appointmentId: selectedApptForRecord,
+              diagnosis: document.getElementById("record-diagnosis").value,
+              prescriptions: document.getElementById("record-prescriptions")
+                .value,
+              doctorNotes: document.getElementById("record-notes").value,
+            }),
+          });
+          showToast("✅ Record saved");
+          closeRecordModal();
+          e.target.reset();
+          loadDoctorDashboard();
+        } catch (err) {
+          showToast("❌ " + err.message);
+        }
+      }
+
+      // Jitsi
+      function openJitsi(link) {
+        document.getElementById("jitsi-modal").classList.remove("hidden");
+        const script = document.createElement("script");
+        script.src = "https://meet.jit.si/external_api.js";
+        script.onload = () => {
+          const room = link.replace("https://meet.jit.si/", "");
+          window._jitsiApi = new window.JitsiMeetExternalAPI("meet.jit.si", {
+            roomName: room,
+            parentNode: document.getElementById("jitsi-container"),
+            configOverwrite: {
+              startWithAudioMuted: true,
+              startWithVideoMuted: false,
+            },
+            interfaceConfigOverwrite: {
+              TOOLBAR_BUTTONS: [
+                "microphone",
+                "camera",
+                "desktop",
+                "fullscreen",
+                "hangup",
+              ],
+            },
+          });
+        };
+        document.head.appendChild(script);
+      }
+      function closeJitsi() {
+        if (window._jitsiApi) window._jitsiApi.dispose();
+        document.getElementById("jitsi-container").innerHTML = "";
+        document.getElementById("jitsi-modal").classList.add("hidden");
+      }
+
+      // Logout
+      async function logout() {
+        await fetch(`${API}/auth/logout`, {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => {});
+        location.reload();
+      }
+
+      // Init
+      document.addEventListener("DOMContentLoaded", () => {
+        // Auto-check if already logged in
+        fetch(`${API}/appointments`, { credentials: "include" })
+          .then((r) => {
+            if (r.ok) {
+              r.json().then(() => {
+                // Simplified: in production, fetch /auth/me endpoint
+                currentUser = {
+                  id: "demo-user",
+                  email: "user@demo.com",
+                  role: "PATIENT",
+                };
+                initApp();
+              });
+            }
+          })
+          .catch(() => {});
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"  // ✅ Fixed typo
+  // output removed: use default node_modules location
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") 
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+  
+  // Appointments: patient side + doctor side
+  appointmentsAsPatient Appointment[] @relation("PatientAppointments")
+  appointmentsAsDoctor  Appointment[] @relation("DoctorAppointments")
+  
+  records MedicalRecord[] @relation("PatientRecords")
+  
+  // Schedule slots (only for DOCTOR role users)
+  // scheduleSlots removed: DoctorProfile.availableSlots owns schedule slots
+}
+
+model PatientProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  dateOfBirth     DateTime
+  weight          Float?
+  height          Float?
+  contactDetails  String?
+  basicMedicalHistory String?
+  profilePictureUrl String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model DoctorProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  specialization  String
+  bio             String?
+  licenseNumber   String
+  profilePictureUrl String?
+  isVerified      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // ✅ Doctor owns the schedule slots
+  availableSlots  ScheduleSlot[] @relation("DoctorProfileSlots")
+}
+
+model ScheduleSlot {
+  id          String   @id @default(uuid())
+  
+  // ✅ Link to DoctorProfile (not generic User)
+  doctorProfileId String
+  doctorProfile   DoctorProfile @relation("DoctorProfileSlots", fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  
+  startAt     DateTime
+  endAt       DateTime
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  // ✅ Back-relation to Appointment
+  appointment   Appointment?
+}
+
+enum AppointmentStatus {
+  BOOKED
+  UPCOMING
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+model Appointment {
+  id          String           @id @default(uuid())
+  
+  patientId   String
+  // ✅ Added missing patient relation
+  patient     User             @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  
+  doctorId    String
+  doctor      User             @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  // ✅ Proper relation to ScheduleSlot
+  slotId      String?          @unique
+  slot        ScheduleSlot?    @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  
+  startAt     DateTime
+  endAt       DateTime
+  status      AppointmentStatus @default(BOOKED)
+  meetingLink String?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  record      MedicalRecord?   // 1:1 with medical record
+}
+
+model MedicalRecord {
+  id          String   @id @default(uuid())
+  appointmentId String @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  
+  patientId     String
+  patient       User   @relation("PatientRecords", fields: [patientId], references: [id], onDelete: Cascade)
+  
+  diagnosis     String?
+  prescriptions String?
+  doctorNotes   String?
+  createdAt     DateTime @default(now())
+}
